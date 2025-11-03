@@ -1,0 +1,146 @@
+name: CI / Build / (optional Deploy)
+
+# Trigger on every push to main and on PRs targeting main
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ci:
+    name: Test & Build
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        # adjust to your test command; fail-fast if tests fail
+        run: npm test -- --ci --reporters=default
+        # If your test script does not accept extra args, use `run: npm test`
+
+      - name: Build project
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifact
+          path: |
+            build
+            dist
+          # Adjust path depending on your build output directory (CRA uses `build`)
+
+# -------------------
+# Optional: Deploy to GitHub Pages (official Pages actions)
+# Uncomment this job if you want automatic Pages deployment.
+#
+# Notes: no extra secrets needed if repo is public. For private repos, ensure Pages is enabled
+# and the GITHUB_TOKEN has Pages publishing permission (default is fine).
+# -------------------
+#  deploy_pages:
+#    name: Deploy to GitHub Pages
+#    needs: ci
+#    runs-on: ubuntu-latest
+#    if: github.ref == 'refs/heads/main'   # only deploy from main
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v4
+#
+#      - name: Download build artifact
+#        uses: actions/download-artifact@v4
+#        with:
+#          name: build-artifact
+#          path: build
+#
+#      - name: Upload artifact for GitHub Pages
+#        uses: actions/upload-pages-artifact@v1
+#        with:
+#          path: build
+#
+#      - name: Deploy to GitHub Pages
+#        uses: actions/deploy-pages@v1
+
+# -------------------
+# Optional: Deploy to Netlify using Netlify CLI
+# -------------------
+#  deploy_netlify:
+#    name: Deploy to Netlify
+#    needs: ci
+#    runs-on: ubuntu-latest
+#    if: github.ref == 'refs/heads/main'
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v4
+#
+#      - name: Setup Node
+#        uses: actions/setup-node@v4
+#        with:
+#          node-version: '18'
+#
+#      - name: Install Netlify CLI
+#        run: npm install -g netlify-cli
+#
+#      - name: Download build artifact
+#        uses: actions/download-artifact@v4
+#        with:
+#          name: build-artifact
+#          path: build
+#
+#      - name: Deploy to Netlify
+#        env:
+#          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+#          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+#        run: |
+#          # --prod will do a production deploy; --dir points to the built files
+#          netlify deploy --site=$NETLIFY_SITE_ID --auth=$NETLIFY_AUTH_TOKEN --prod --dir=build
+
+# -------------------
+# Optional: Deploy static build to S3 (AWS) + invalidate CloudFront
+# -------------------
+#  deploy_s3:
+#    name: Deploy to AWS S3
+#    needs: ci
+#    runs-on: ubuntu-latest
+#    if: github.ref == 'refs/heads/main'
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v4
+#
+#      - name: Configure AWS credentials
+#        uses: aws-actions/configure-aws-credentials@v3
+#        with:
+#          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#          aws-region: us-east-1   # set your AWS region
+#
+#      - name: Download build artifact
+#        uses: actions/download-artifact@v4
+#        with:
+#          name: build-artifact
+#          path: build
+#
+#      - name: Sync to S3
+#        run: |
+#          aws s3 sync build/ s3://$S3_BUCKET_NAME --delete --acl public-read
+#        env:
+#          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+#
+#      - name: Invalidate CloudFront (optional)
+#        if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
+#        run: |
+#          aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"
+#        env:
+#          CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
